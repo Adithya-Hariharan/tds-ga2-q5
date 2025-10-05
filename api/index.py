@@ -49,17 +49,17 @@ TELEMETRY_DATA_JSON = """
 ]
 """
 
-# Load the data once at the module level (serverless 'cold start')
+# Load the data once at the module level
 TELEMETRY_RECORDS = json.loads(TELEMETRY_DATA_JSON)
 
 app = FastAPI()
 
-# 1. Enable CORS for POST requests from any origin
+# 1. CORS Configuration (FIXED to allow all methods for preflight)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["POST"], # Only allow POST for the main logic
+    allow_methods=["*"], # ALLOW ALL METHODS (POST, GET, and crucial OPTIONS)
     allow_headers=["*"],
 )
 
@@ -82,12 +82,10 @@ def calculate_metrics(records: List[Dict[str, Any]], threshold: float) -> Dict[s
     uptimes = [r['uptime_pct'] for r in records]
 
     avg_latency = np.mean(latencies)
-    # np.percentile returns the 95th percentile
     p95_latency = np.percentile(latencies, 95)
     avg_uptime = np.mean(uptimes)
     breaches = sum(1 for latency in latencies if latency > threshold)
 
-    # Round floats for clean output
     return {
         "avg_latency": round(float(avg_latency), 3),
         "p95_latency": round(float(p95_latency), 3),
@@ -95,7 +93,7 @@ def calculate_metrics(records: List[Dict[str, Any]], threshold: float) -> Dict[s
         "breaches": breaches,
     }
 
-# --- HEALTH CHECK ENDPOINT (FIXES "METHOD NOT ALLOWED") ---
+# --- HEALTH CHECK ENDPOINT (To prevent "Method Not Allowed" on browser/GET) ---
 @app.get("/")
 def health_check():
     """
