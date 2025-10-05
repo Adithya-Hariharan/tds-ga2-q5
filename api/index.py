@@ -13,7 +13,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load telemetry at cold start
+# Load telemetry data on cold start
 with open(os.path.join(os.path.dirname(__file__), "../q-vercel-latency.json"), "r") as f:
     telemetry = json.load(f)
 
