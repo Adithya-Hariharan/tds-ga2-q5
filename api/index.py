@@ -7,7 +7,7 @@ import json
 from typing import List, Dict, Any
 
 # --- Embedded Telemetry Data ---
-# Load the data directly as a string, as file I/O is restricted in serverless.
+# Loaded directly as a string, as file I/O is restricted in serverless.
 TELEMETRY_DATA_JSON = """
 [
   { "region": "apac", "service": "catalog", "latency_ms": 135.67, "uptime_pct": 97.962, "timestamp": 20250301 },
@@ -59,7 +59,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["POST"],
+    allow_methods=["POST"], # Only allow POST for the main logic
     allow_headers=["*"],
 )
 
@@ -82,11 +82,12 @@ def calculate_metrics(records: List[Dict[str, Any]], threshold: float) -> Dict[s
     uptimes = [r['uptime_pct'] for r in records]
 
     avg_latency = np.mean(latencies)
-    # np.percentile returns the k-th percentile(s) of the array elements.
+    # np.percentile returns the 95th percentile
     p95_latency = np.percentile(latencies, 95)
     avg_uptime = np.mean(uptimes)
     breaches = sum(1 for latency in latencies if latency > threshold)
 
+    # Round floats for clean output
     return {
         "avg_latency": round(float(avg_latency), 3),
         "p95_latency": round(float(p95_latency), 3),
@@ -94,7 +95,16 @@ def calculate_metrics(records: List[Dict[str, Any]], threshold: float) -> Dict[s
         "breaches": breaches,
     }
 
+# --- HEALTH CHECK ENDPOINT (FIXES "METHOD NOT ALLOWED") ---
+@app.get("/")
+def health_check():
+    """
+    Handles GET requests for health checks and browser visits.
+    """
+    return {"status": "ok", "message": "Latency check API is running. Send a POST request to this endpoint."}
 
+
+# --- MAIN ENDPOINT FOR THE CHALLENGE ---
 # 2. Accept a POST request with the specified JSON body
 @app.post("/")
 def check_latency(request_data: LatencyRequest):
@@ -120,5 +130,4 @@ def check_latency(request_data: LatencyRequest):
         response[region] = metrics
 
     # 3. Return per-region metrics
-    # The output format is a dictionary where keys are regions and values are metric dictionaries.
     return response
