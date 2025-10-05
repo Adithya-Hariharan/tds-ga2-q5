@@ -1,11 +1,11 @@
-import os
-import json
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
+import json
+import os
 
 app = FastAPI()
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -13,30 +13,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def load_telemetry():
-    here = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(here, "..", "q-vercel-latency.json")
-    with open(path, "r") as f:
-        return json.load(f)
-
-telemetry = load_telemetry()
+# Load telemetry at cold start
+with open(os.path.join(os.path.dirname(__file__), "../q-vercel-latency.json"), "r") as f:
+    telemetry = json.load(f)
 
 @app.post("/")
-async def endpoint(request: Request):
-    body = await request.json()
-    regions = body.get("regions", [])
-    threshold = body.get("threshold_ms", 180)
+async def check_latency(request: Request):
+    payload = await request.json()
+    regions = payload["regions"]
+    threshold_ms = payload["threshold_ms"]
 
-    out = {}
+    results = {}
+
     for region in regions:
-        region_data = [r for r in telemetry if r["region"] == region]
-        latencies = [r["latency_ms"] for r in region_data]
-        uptimes = [r["uptime_pct"] for r in region_data]
-        breaches = sum(1 for r in region_data if r["latency_ms"] > threshold)
-        out[region] = {
-            "avg_latency": float(np.mean(latencies)) if latencies else None,
-            "p95_latency": float(np.percentile(latencies, 95)) if latencies else None,
-            "avg_uptime": float(np.mean(uptimes)) if uptimes else None,
+        recs = [r for r in telemetry if r["region"] == region]
+        lat = np.array([r["latency_ms"] for r in recs])
+        up = np.array([r["uptime_pct"] for r in recs])
+        breaches = int(np.sum(lat > threshold_ms))
+        avg_latency = float(np.mean(lat)) if len(lat) else None
+        p95_latency = float(np.percentile(lat, 95)) if len(lat) else None
+        avg_uptime = float(np.mean(up)) if len(up) else None
+
+        results[region] = {
+            "avg_latency": avg_latency,
+            "p95_latency": p95_latency,
+            "avg_uptime": avg_uptime,
             "breaches": breaches
         }
-    return out
+
+    return JSONResponse(results)
