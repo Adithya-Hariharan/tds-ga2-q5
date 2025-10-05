@@ -1,11 +1,10 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import numpy as np
-import json
-import os
 
 app = FastAPI()
+
+# Enable CORS for POST from any origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -13,36 +12,52 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load telemetry data on cold start
-with open(os.path.join(os.path.dirname(__file__), "../q-vercel-latency.json"), "r") as f:
-    telemetry = json.load(f)
-
-@app.get("/")
-async def root():
-    return {"status": "ok"}
-
 @app.post("/")
-async def check_latency(request: Request):
-    payload = await request.json()
-    regions = payload["regions"]
-    threshold_ms = payload["threshold_ms"]
+async def get_latency_metrics(data: dict):
+    regions = data.get("regions", [])
+    threshold_ms = data.get("threshold_ms", 0)
 
-    results = {}
+    # Simulated telemetry data example (replace with actual records)
+    # Here should be your eShopCo telemetry data source. For demo, we mock.
+    telemetry_data = {
+        "apac": [
+            {"latency": 150, "uptime": 99.9},
+            {"latency": 190, "uptime": 99.7},
+            {"latency": 210, "uptime": 99.6},
+        ],
+        "amer": [
+            {"latency": 130, "uptime": 99.8},
+            {"latency": 180, "uptime": 99.9},
+            {"latency": 185, "uptime": 99.8},
+        ],
+    }
+
+    result = {}
 
     for region in regions:
-        recs = [r for r in telemetry if r["region"] == region]
-        lat = np.array([r["latency_ms"] for r in recs])
-        up = np.array([r["uptime_pct"] for r in recs])
-        breaches = int(np.sum(lat > threshold_ms))
-        avg_latency = float(np.mean(lat)) if len(lat) else None
-        p95_latency = float(np.percentile(lat, 95)) if len(lat) else None
-        avg_uptime = float(np.mean(up)) if len(up) else None
+        records = telemetry_data.get(region, [])
+        if not records:
+            result[region] = {
+                "avg_latency": None,
+                "p95_latency": None,
+                "avg_uptime": None,
+                "breaches": 0,
+            }
+            continue
 
-        results[region] = {
+        latencies = [r["latency"] for r in records]
+        uptimes = [r["uptime"] for r in records]
+
+        avg_latency = float(np.mean(latencies))
+        p95_latency = float(np.percentile(latencies, 95))
+        avg_uptime = float(np.mean(uptimes))
+        breaches = sum(1 for l in latencies if l > threshold_ms)
+
+        result[region] = {
             "avg_latency": avg_latency,
             "p95_latency": p95_latency,
             "avg_uptime": avg_uptime,
-            "breaches": breaches
+            "breaches": breaches,
         }
 
-    return JSONResponse(results)
+    return result
