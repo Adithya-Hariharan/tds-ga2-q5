@@ -17,6 +17,10 @@ app.add_middleware(
 with open(os.path.join(os.path.dirname(__file__), "../q-vercel-latency.json"), "r") as f:
     telemetry = json.load(f)
 
+@app.get("/")
+async def root():
+    return {"status": "ok"}
+
 @app.post("/")
 async def check_latency(request: Request):
     payload = await request.json()
