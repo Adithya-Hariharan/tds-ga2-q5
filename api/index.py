@@ -54,12 +54,12 @@ TELEMETRY_RECORDS = json.loads(TELEMETRY_DATA_JSON)
 
 app = FastAPI()
 
-# 1. CORS Configuration (FIXED to allow all methods for preflight)
+# 1. CORS Configuration (Fixes the Access-Control-Allow-Origin error by allowing all methods for preflight)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["*"], # ALLOW ALL METHODS (POST, GET, and crucial OPTIONS)
+    allow_methods=["*"], # Must allow OPTIONS for preflight requests
     allow_headers=["*"],
 )
 
@@ -93,7 +93,7 @@ def calculate_metrics(records: List[Dict[str, Any]], threshold: float) -> Dict[s
         "breaches": breaches,
     }
 
-# --- HEALTH CHECK ENDPOINT (To prevent "Method Not Allowed" on browser/GET) ---
+# --- HEALTH CHECK ENDPOINT (Fixes "Method Not Allowed" on browser/GET) ---
 @app.get("/")
 def health_check():
     """
@@ -103,11 +103,10 @@ def health_check():
 
 
 # --- MAIN ENDPOINT FOR THE CHALLENGE ---
-# 2. Accept a POST request with the specified JSON body
 @app.post("/")
 def check_latency(request_data: LatencyRequest):
     """
-    Processes the request to return per-region latency and uptime metrics.
+    Accepts POST request and returns per-region metrics.
     """
     selected_regions = [r.lower() for r in request_data.regions]
     threshold = request_data.threshold_ms
@@ -127,5 +126,5 @@ def check_latency(request_data: LatencyRequest):
         metrics = calculate_metrics(records, threshold)
         response[region] = metrics
 
-    # 3. Return per-region metrics
+    # Return per-region metrics
     return response
